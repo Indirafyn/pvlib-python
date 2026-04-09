@@ -685,7 +685,7 @@ def _parse_pvgis_tmy_csv(src):
     #    time(UTC),T2m,RH,G(h),Gb(n),Gd(h),IR(h),WS10m,WD10m,SP
     headers = [h.decode('utf-8').strip() for h in src.readline().split(b',')]
     # Refactoring (Replace Magic Number with Named Constant): use explicit TMY
-    # row-count constant instead of hard-coded 8760.
+    # row-count constant instead of hard-coded 8760 for PVGIS hourly TMY data.
     data = pd.DataFrame(
         [src.readline().split(b',') for _ in range(HOURS_PER_TMY_YEAR)],
         columns=headers)
@@ -767,7 +767,7 @@ def read_pvgis_tmy(filename, pvgis_format=None, map_variables=True):
     # Refactoring (Replace Conditional with Dispatch Table): parser selection
     # now uses format->reader mapping instead of if/elif branches.
     parser_dispatch = {
-        'epw': lambda f: read_epw(f),
+        'epw': read_epw,
         'json': _read_pvgis_tmy_json,
         'csv': _read_pvgis_tmy_csv,
     }
