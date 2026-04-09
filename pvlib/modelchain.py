@@ -85,17 +85,16 @@ def get_orientation(strategy, **kwargs):
     -------
     surface_tilt, surface_azimuth
     """
-    if strategy == 'south_at_latitude_tilt':
-        surface_azimuth = 180
-        surface_tilt = kwargs['latitude']
-    elif strategy == 'flat':
-        surface_azimuth = 180
-        surface_tilt = 0
-    else:
+    # Refactoring (Replace Conditional with Lookup Table): orientation
+    # strategies are mapped to callables instead of if/elif branching.
+    strategy_map = {
+        'south_at_latitude_tilt': lambda options: (options['latitude'], 180),
+        'flat': lambda options: (0, 180),
+    }
+    if strategy not in strategy_map:
         raise ValueError('invalid orientation strategy. strategy must '
                          'be one of south_at_latitude_tilt, flat,')
-
-    return surface_tilt, surface_azimuth
+    return strategy_map[strategy](kwargs)
 
 
 def _getmcattr(self, attr):
@@ -1985,16 +1984,15 @@ def _irrad_for_celltemp(total_irrad, effective_irradiance):
         tuple if total_irrad is a tuple of DataFrame
 
     """
+    # Refactoring (Consolidate Conditional Expression): use guard-style checks
+    # to flatten nested branches while keeping the same fallback behavior.
     if isinstance(total_irrad, tuple):
-        if all('poa_global' in df for df in total_irrad):
-            return _tuple_from_dfs(total_irrad, 'poa_global')
-        else:
+        if not all('poa_global' in df for df in total_irrad):
             return effective_irradiance
-    else:
-        if 'poa_global' in total_irrad:
-            return total_irrad['poa_global']
-        else:
-            return effective_irradiance
+        return _tuple_from_dfs(total_irrad, 'poa_global')
+    if 'poa_global' not in total_irrad:
+        return effective_irradiance
+    return total_irrad['poa_global']
 
 
 def _snl_params(inverter_params):
