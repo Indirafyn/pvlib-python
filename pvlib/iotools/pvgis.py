@@ -100,11 +100,15 @@ def _build_pvgis_hourly_params(latitude, longitude, options):
     if options.raddatabase is not None:
         params['raddatabase'] = options.raddatabase
     if options.start is not None:
-        params['startyear'] = options.start if isinstance(options.start, int) \
+        params['startyear'] = (
+            options.start if isinstance(options.start, int)
             else pd.to_datetime(options.start).year
+        )
     if options.end is not None:
-        params['endyear'] = options.end if isinstance(options.end, int) else \
-            pd.to_datetime(options.end).year
+        params['endyear'] = (
+            options.end if isinstance(options.end, int)
+            else pd.to_datetime(options.end).year
+        )
     if options.peakpower is not None:
         params['peakpower'] = options.peakpower
     return params
