@@ -78,6 +78,42 @@ REQUEST_VARIABLE_MAP = {
 }
 
 
+def _get_nsrdb_psm4(latitude, longitude, api_key, email, year, time_step,
+                    parameters, leap_day, full_name, affiliation, utc,
+                    map_variables, url, default_url, timeout):
+    """Request and parse one PSM4 dataset variant."""
+    # Refactoring type: Extract Method and Parameterize Function.
+    # Centralize the identical request, error, decoding, and parsing logic used
+    # by each public dataset-specific wrapper.
+    longitude = ('%9.4f' % longitude).strip()
+    latitude = ('%8.4f' % latitude).strip()
+    parameters = [REQUEST_VARIABLE_MAP.get(a, a) for a in parameters]
+    params = {
+        'api_key': api_key,
+        'full_name': full_name,
+        'email': email,
+        'affiliation': affiliation,
+        'reason': PVLIB_PYTHON,
+        'mailing_list': 'false',
+        'wkt': 'POINT(%s %s)' % (longitude, latitude),
+        'names': year,
+        'attributes': ','.join(parameters),
+        'leap_day': str(leap_day).lower(),
+        'utc': str(utc).lower(),
+        'interval': time_step
+    }
+    response = requests.get(
+        default_url if url is None else url, params=params, timeout=timeout)
+    if not response.ok:
+        try:
+            errors = response.json()['errors']
+        except JSONDecodeError:
+            errors = response.content.decode('utf-8')
+        raise requests.HTTPError(errors, response=response)
+    fbuf = io.StringIO(response.content.decode('utf-8'))
+    return read_nsrdb_psm4(fbuf, map_variables)
+
+
 def get_nsrdb_psm4_aggregated(latitude, longitude, api_key, email,
                               year, time_step=60,
                               parameters=PARAMETERS, leap_day=True,
@@ -174,48 +210,10 @@ def get_nsrdb_psm4_aggregated(latitude, longitude, api_key, email,
     .. [2] `NSRDB GOES Aggregated V4.0.0
        <https://developer.nlr.gov/docs/solar/nsrdb/nsrdb-GOES-aggregated-v4-0-0-download/>`_
     """
-    # The well know text (WKT) representation of geometry notation is strict.
-    # A POINT object is a string with longitude first, then the latitude, with
-    # four decimals each, and exactly one space between them.
-    longitude = ('%9.4f' % longitude).strip()
-    latitude = ('%8.4f' % latitude).strip()
-    # TODO: make format_WKT(object_type, *args) in tools.py
-
-    # convert pvlib names in parameters to PSM4 convention
-    parameters = [REQUEST_VARIABLE_MAP.get(a, a) for a in parameters]
-
-    # required query-string parameters for request to PSM4 API
-    params = {
-        'api_key': api_key,
-        'full_name': full_name,
-        'email': email,
-        'affiliation': affiliation,
-        'reason': PVLIB_PYTHON,
-        'mailing_list': 'false',
-        'wkt': 'POINT(%s %s)' % (longitude, latitude),
-        'names': year,
-        'attributes':  ','.join(parameters),
-        'leap_day': str(leap_day).lower(),
-        'utc': str(utc).lower(),
-        'interval': time_step
-    }
-    # request CSV download from NLR PSM4
-    if url is None:
-        url = PSM4_AGG_URL
-
-    response = requests.get(url, params=params, timeout=timeout)
-    if not response.ok:
-        # if the API key is rejected, then the response status will be 403
-        # Forbidden, and then the error is in the content and there is no JSON
-        try:
-            errors = response.json()['errors']
-        except JSONDecodeError:
-            errors = response.content.decode('utf-8')
-        raise requests.HTTPError(errors, response=response)
-    # the CSV is in the response content as a UTF-8 bytestring
-    # to use pandas we need to create a file buffer from the response
-    fbuf = io.StringIO(response.content.decode('utf-8'))
-    return read_nsrdb_psm4(fbuf, map_variables)
+    return _get_nsrdb_psm4(
+        latitude, longitude, api_key, email, year, time_step, parameters,
+        leap_day, full_name, affiliation, utc, map_variables, url,
+        PSM4_AGG_URL, timeout)
 
 
 def get_nsrdb_psm4_tmy(latitude, longitude, api_key, email, year='tmy',
@@ -314,48 +312,10 @@ def get_nsrdb_psm4_tmy(latitude, longitude, api_key, email, year='tmy',
     .. [2] `NSRDB GOES Tmy V4.0.0
        <https://developer.nlr.gov/docs/solar/nsrdb/nsrdb-GOES-tmy-v4-0-0-download/>`_
     """
-    # The well know text (WKT) representation of geometry notation is strict.
-    # A POINT object is a string with longitude first, then the latitude, with
-    # four decimals each, and exactly one space between them.
-    longitude = ('%9.4f' % longitude).strip()
-    latitude = ('%8.4f' % latitude).strip()
-    # TODO: make format_WKT(object_type, *args) in tools.py
-
-    # convert pvlib names in parameters to PSM4 convention
-    parameters = [REQUEST_VARIABLE_MAP.get(a, a) for a in parameters]
-
-    # required query-string parameters for request to PSM4 API
-    params = {
-        'api_key': api_key,
-        'full_name': full_name,
-        'email': email,
-        'affiliation': affiliation,
-        'reason': PVLIB_PYTHON,
-        'mailing_list': 'false',
-        'wkt': 'POINT(%s %s)' % (longitude, latitude),
-        'names': year,
-        'attributes':  ','.join(parameters),
-        'leap_day': str(leap_day).lower(),
-        'utc': str(utc).lower(),
-        'interval': time_step
-    }
-    # request CSV download from NLR PSM4
-    if url is None:
-        url = PSM4_TMY_URL
-
-    response = requests.get(url, params=params, timeout=timeout)
-    if not response.ok:
-        # if the API key is rejected, then the response status will be 403
-        # Forbidden, and then the error is in the content and there is no JSON
-        try:
-            errors = response.json()['errors']
-        except JSONDecodeError:
-            errors = response.content.decode('utf-8')
-        raise requests.HTTPError(errors, response=response)
-    # the CSV is in the response content as a UTF-8 bytestring
-    # to use pandas we need to create a file buffer from the response
-    fbuf = io.StringIO(response.content.decode('utf-8'))
-    return read_nsrdb_psm4(fbuf, map_variables)
+    return _get_nsrdb_psm4(
+        latitude, longitude, api_key, email, year, time_step, parameters,
+        leap_day, full_name, affiliation, utc, map_variables, url,
+        PSM4_TMY_URL, timeout)
 
 
 def get_nsrdb_psm4_conus(latitude, longitude, api_key, email, year,
@@ -450,48 +410,10 @@ def get_nsrdb_psm4_conus(latitude, longitude, api_key, email, year,
     .. [2] `NSRDB GOES Conus V4.0.0
        <https://developer.nlr.gov/docs/solar/nsrdb/nsrdb-GOES-conus-v4-0-0-download/>`_
     """
-    # The well know text (WKT) representation of geometry notation is strict.
-    # A POINT object is a string with longitude first, then the latitude, with
-    # four decimals each, and exactly one space between them.
-    longitude = ('%9.4f' % longitude).strip()
-    latitude = ('%8.4f' % latitude).strip()
-    # TODO: make format_WKT(object_type, *args) in tools.py
-
-    # convert pvlib names in parameters to PSM4 convention
-    parameters = [REQUEST_VARIABLE_MAP.get(a, a) for a in parameters]
-
-    # required query-string parameters for request to PSM4 API
-    params = {
-        'api_key': api_key,
-        'full_name': full_name,
-        'email': email,
-        'affiliation': affiliation,
-        'reason': PVLIB_PYTHON,
-        'mailing_list': 'false',
-        'wkt': 'POINT(%s %s)' % (longitude, latitude),
-        'names': year,
-        'attributes':  ','.join(parameters),
-        'leap_day': str(leap_day).lower(),
-        'utc': str(utc).lower(),
-        'interval': time_step
-    }
-    # request CSV download from NLR PSM4
-    if url is None:
-        url = PSM4_CON_URL
-
-    response = requests.get(url, params=params, timeout=timeout)
-    if not response.ok:
-        # if the API key is rejected, then the response status will be 403
-        # Forbidden, and then the error is in the content and there is no JSON
-        try:
-            errors = response.json()['errors']
-        except JSONDecodeError:
-            errors = response.content.decode('utf-8')
-        raise requests.HTTPError(errors, response=response)
-    # the CSV is in the response content as a UTF-8 bytestring
-    # to use pandas we need to create a file buffer from the response
-    fbuf = io.StringIO(response.content.decode('utf-8'))
-    return read_nsrdb_psm4(fbuf, map_variables)
+    return _get_nsrdb_psm4(
+        latitude, longitude, api_key, email, year, time_step, parameters,
+        leap_day, full_name, affiliation, utc, map_variables, url,
+        PSM4_CON_URL, timeout)
 
 
 def get_nsrdb_psm4_full_disc(latitude, longitude, api_key, email,
@@ -589,48 +511,10 @@ def get_nsrdb_psm4_full_disc(latitude, longitude, api_key, email,
     .. [2] `NSRDB GOES Full Disc V4.0.0
        <https://developer.nlr.gov/docs/solar/nsrdb/nsrdb-GOES-full-disc-v4-0-0-download/>`_
     """
-    # The well know text (WKT) representation of geometry notation is strict.
-    # A POINT object is a string with longitude first, then the latitude, with
-    # four decimals each, and exactly one space between them.
-    longitude = ('%9.4f' % longitude).strip()
-    latitude = ('%8.4f' % latitude).strip()
-    # TODO: make format_WKT(object_type, *args) in tools.py
-
-    # convert pvlib names in parameters to PSM4 convention
-    parameters = [REQUEST_VARIABLE_MAP.get(a, a) for a in parameters]
-
-    # required query-string parameters for request to PSM4 API
-    params = {
-        'api_key': api_key,
-        'full_name': full_name,
-        'email': email,
-        'affiliation': affiliation,
-        'reason': PVLIB_PYTHON,
-        'mailing_list': 'false',
-        'wkt': 'POINT(%s %s)' % (longitude, latitude),
-        'names': year,
-        'attributes':  ','.join(parameters),
-        'leap_day': str(leap_day).lower(),
-        'utc': str(utc).lower(),
-        'interval': time_step
-    }
-    # request CSV download from NLR PSM4
-    if url is None:
-        url = PSM4_FUL_URL
-
-    response = requests.get(url, params=params, timeout=timeout)
-    if not response.ok:
-        # if the API key is rejected, then the response status will be 403
-        # Forbidden, and then the error is in the content and there is no JSON
-        try:
-            errors = response.json()['errors']
-        except JSONDecodeError:
-            errors = response.content.decode('utf-8')
-        raise requests.HTTPError(errors, response=response)
-    # the CSV is in the response content as a UTF-8 bytestring
-    # to use pandas we need to create a file buffer from the response
-    fbuf = io.StringIO(response.content.decode('utf-8'))
-    return read_nsrdb_psm4(fbuf, map_variables)
+    return _get_nsrdb_psm4(
+        latitude, longitude, api_key, email, year, time_step, parameters,
+        leap_day, full_name, affiliation, utc, map_variables, url,
+        PSM4_FUL_URL, timeout)
 
 
 def get_nsrdb_psm4_polar(latitude, longitude, api_key, email,
@@ -738,48 +622,10 @@ def get_nsrdb_psm4_polar(latitude, longitude, api_key, email,
     .. [3] `NSRDB Polar V4.0.0
        <https://developer.nlr.gov/docs/solar/nsrdb/nsrdb-polar-v4-0-0-download/>`_
     """
-    # The well know text (WKT) representation of geometry notation is strict.
-    # A POINT object is a string with longitude first, then the latitude, with
-    # four decimals each, and exactly one space between them.
-    longitude = ('%9.4f' % longitude).strip()
-    latitude = ('%8.4f' % latitude).strip()
-    # TODO: make format_WKT(object_type, *args) in tools.py
-
-    # convert pvlib names in parameters to PSM4 convention
-    parameters = [REQUEST_VARIABLE_MAP.get(a, a) for a in parameters]
-
-    # required query-string parameters for request to PSM4 API
-    params = {
-        'api_key': api_key,
-        'full_name': full_name,
-        'email': email,
-        'affiliation': affiliation,
-        'reason': PVLIB_PYTHON,
-        'mailing_list': 'false',
-        'wkt': 'POINT(%s %s)' % (longitude, latitude),
-        'names': year,
-        'attributes':  ','.join(parameters),
-        'leap_day': str(leap_day).lower(),
-        'utc': str(utc).lower(),
-        'interval': time_step
-    }
-    # request CSV download from NLR PSM4
-    if url is None:
-        url = PSM4_POLAR_URL
-
-    response = requests.get(url, params=params, timeout=timeout)
-    if not response.ok:
-        # if the API key is rejected, then the response status will be 403
-        # Forbidden, and then the error is in the content and there is no JSON
-        try:
-            errors = response.json()['errors']
-        except JSONDecodeError:
-            errors = response.content.decode('utf-8')
-        raise requests.HTTPError(errors, response=response)
-    # the CSV is in the response content as a UTF-8 bytestring
-    # to use pandas we need to create a file buffer from the response
-    fbuf = io.StringIO(response.content.decode('utf-8'))
-    return read_nsrdb_psm4(fbuf, map_variables)
+    return _get_nsrdb_psm4(
+        latitude, longitude, api_key, email, year, time_step, parameters,
+        leap_day, full_name, affiliation, utc, map_variables, url,
+        PSM4_POLAR_URL, timeout)
 
 
 def get_nsrdb_psm4_polar_tmy(latitude, longitude, api_key, email, year='tmy',
@@ -887,48 +733,10 @@ def get_nsrdb_psm4_polar_tmy(latitude, longitude, api_key, email, year='tmy',
     .. [3] `NSRDB Polar Tmy V4.0.0
        <https://developer.nlr.gov/docs/solar/nsrdb/nsrdb-polar-tmy-v4-0-0-download/>`_
     """
-    # The well know text (WKT) representation of geometry notation is strict.
-    # A POINT object is a string with longitude first, then the latitude, with
-    # four decimals each, and exactly one space between them.
-    longitude = ('%9.4f' % longitude).strip()
-    latitude = ('%8.4f' % latitude).strip()
-    # TODO: make format_WKT(object_type, *args) in tools.py
-
-    # convert pvlib names in parameters to PSM4 convention
-    parameters = [REQUEST_VARIABLE_MAP.get(a, a) for a in parameters]
-
-    # required query-string parameters for request to PSM4 API
-    params = {
-        'api_key': api_key,
-        'full_name': full_name,
-        'email': email,
-        'affiliation': affiliation,
-        'reason': PVLIB_PYTHON,
-        'mailing_list': 'false',
-        'wkt': 'POINT(%s %s)' % (longitude, latitude),
-        'names': year,
-        'attributes':  ','.join(parameters),
-        'leap_day': str(leap_day).lower(),
-        'utc': str(utc).lower(),
-        'interval': time_step
-    }
-    # request CSV download from NLR PSM4
-    if url is None:
-        url = PSM4_POLAR_TMY_URL
-
-    response = requests.get(url, params=params, timeout=timeout)
-    if not response.ok:
-        # if the API key is rejected, then the response status will be 403
-        # Forbidden, and then the error is in the content and there is no JSON
-        try:
-            errors = response.json()['errors']
-        except JSONDecodeError:
-            errors = response.content.decode('utf-8')
-        raise requests.HTTPError(errors, response=response)
-    # the CSV is in the response content as a UTF-8 bytestring
-    # to use pandas we need to create a file buffer from the response
-    fbuf = io.StringIO(response.content.decode('utf-8'))
-    return read_nsrdb_psm4(fbuf, map_variables)
+    return _get_nsrdb_psm4(
+        latitude, longitude, api_key, email, year, time_step, parameters,
+        leap_day, full_name, affiliation, utc, map_variables, url,
+        PSM4_POLAR_TMY_URL, timeout)
 
 
 def read_nsrdb_psm4(filename, map_variables=True):

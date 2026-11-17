@@ -468,34 +468,39 @@ def get_sky_diffuse(surface_tilt, surface_azimuth,
                                        'perez', 'perez-driesse'}:
         raise ValueError(f'dni_extra is required for model {model}')
 
-    if model == 'isotropic':
-        sky = isotropic(surface_tilt, dhi, return_components=return_components)
-    elif model == 'klucher':
-        sky = klucher(surface_tilt, surface_azimuth, dhi, ghi,
-                      solar_zenith, solar_azimuth)
-    elif model == 'haydavies':
-        sky = haydavies(surface_tilt, surface_azimuth, dhi, dni, dni_extra,
-                        solar_zenith, solar_azimuth,
-                        return_components=return_components)
-    elif model == 'reindl':
-        sky = reindl(surface_tilt, surface_azimuth, dhi, dni, ghi, dni_extra,
-                     solar_zenith, solar_azimuth,
-                     return_components=return_components)
-    elif model == 'king':
-        sky = king(surface_tilt, dhi, ghi, solar_zenith)
-    elif model == 'perez':
+    # Refactoring type: Replace Conditional with Dispatch Table.
+    # The table handles models with uniform call signatures; the two models
+    # requiring derived inputs retain their small, explicit preparation steps.
+    calculators = {
+        'isotropic': lambda: isotropic(
+            surface_tilt, dhi, return_components=return_components),
+        'klucher': lambda: klucher(
+            surface_tilt, surface_azimuth, dhi, ghi,
+            solar_zenith, solar_azimuth),
+        'haydavies': lambda: haydavies(
+            surface_tilt, surface_azimuth, dhi, dni, dni_extra,
+            solar_zenith, solar_azimuth, return_components=return_components),
+        'reindl': lambda: reindl(
+            surface_tilt, surface_azimuth, dhi, dni, ghi, dni_extra,
+            solar_zenith, solar_azimuth, return_components=return_components),
+        'king': lambda: king(
+            surface_tilt, dhi, ghi, solar_zenith),
+        'perez-driesse': lambda: perez_driesse(
+            surface_tilt, surface_azimuth, dhi, dni, dni_extra,
+            solar_zenith, solar_azimuth, airmass,
+            return_components=return_components),
+    }
+    if model == 'perez':
         if airmass is None:
             airmass = atmosphere.get_relative_airmass(solar_zenith)
-        sky = perez(surface_tilt, surface_azimuth, dhi, dni, dni_extra,
-                    solar_zenith, solar_azimuth, airmass,
-                    model=model_perez, return_components=return_components)
-    elif model == 'perez-driesse':
-        # perez_driesse will calculate its own airmass if needed
-        sky = perez_driesse(surface_tilt, surface_azimuth, dhi, dni, dni_extra,
-                            solar_zenith, solar_azimuth, airmass,
-                            return_components=return_components)
+        sky = perez(
+            surface_tilt, surface_azimuth, dhi, dni, dni_extra,
+            solar_zenith, solar_azimuth, airmass, model=model_perez,
+            return_components=return_components)
     else:
-        raise ValueError(f'invalid model selection {model}')
+        if model not in calculators:
+            raise ValueError(f'invalid model selection {model}')
+        sky = calculators[model]()
 
     return sky
 

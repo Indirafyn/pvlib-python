@@ -889,9 +889,10 @@ def detect_clearsky(measured, clearsky, times=None, infer_limits=False,
 
         # Compute arg min of MSE between model and observations
         C = (clear_clear**2).sum()
-        if not (pd.isna(C) or C == 0):  # safety check
-            # only update alpha if C is strictly positive
-            alpha = (clear_meas * clear_clear).sum() / C
+        # Refactoring type: Extract Method.
+        # Keep the scaling update isolated from window classification so the
+        # convergence rule remains easy to verify independently.
+        alpha = _update_clearsky_alpha(alpha, clear_meas, clear_clear)
         if round(alpha*10000) == round(previous_alpha*10000):
             break
     else:
@@ -922,6 +923,14 @@ def detect_clearsky(measured, clearsky, times=None, infer_limits=False,
         return clear_samples, components, alpha
     else:
         return clear_samples
+
+
+def _update_clearsky_alpha(alpha, clear_meas, clear_clear):
+    """Return the next clear-sky scale factor, preserving safety checks."""
+    C = (clear_clear**2).sum()
+    if not (pd.isna(C) or C == 0):
+        return (clear_meas * clear_clear).sum() / C
+    return alpha
 
 
 def bird(zenith, airmass_relative, aod380, aod500, precipitable_water,

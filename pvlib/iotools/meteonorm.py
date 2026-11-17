@@ -117,7 +117,9 @@ def get_meteonorm_forecast_basic(
     endpoint = "forecast/basic"
     time_step = None
 
-    data, meta = _get_meteonorm(
+    # Refactoring type: Extract Common Wrapper.
+    # Keep endpoint selection and argument forwarding in one shared helper.
+    data, meta = _get_meteonorm_timeseries(
         latitude, longitude, start, end,
         api_key, parameters, surface_tilt, surface_azimuth,
         time_step, horizon, interval_index, map_variables,
@@ -206,7 +208,8 @@ def get_meteonorm_forecast_precision(
     """
     endpoint = "forecast/precision"
 
-    data, meta = _get_meteonorm(
+    # Refactoring type: Extract Common Wrapper.
+    data, meta = _get_meteonorm_timeseries(
         latitude, longitude, start, end,
         api_key, parameters, surface_tilt, surface_azimuth,
         time_step, horizon, interval_index, map_variables,
@@ -296,7 +299,8 @@ def get_meteonorm_observation_realtime(
     """
     endpoint = "observation/realtime"
 
-    data, meta = _get_meteonorm(
+    # Refactoring type: Extract Common Wrapper.
+    data, meta = _get_meteonorm_timeseries(
         latitude, longitude, start, end,
         api_key, parameters, surface_tilt, surface_azimuth,
         time_step, horizon, interval_index, map_variables,
@@ -391,7 +395,8 @@ def get_meteonorm_observation_training(
     """  # noqa: E501
     endpoint = "observation/training"
 
-    data, meta = _get_meteonorm(
+    # Refactoring type: Extract Common Wrapper.
+    data, meta = _get_meteonorm_timeseries(
         latitude, longitude, start, end,
         api_key, parameters, surface_tilt, surface_azimuth,
         time_step, horizon, interval_index, map_variables,
@@ -528,6 +533,17 @@ def get_meteonorm_tmy(
         interval_index, map_variables,
         url, endpoint, **additional_params)
     return data, meta
+
+
+def _get_meteonorm_timeseries(
+        latitude, longitude, start, end, api_key, parameters,
+        surface_tilt, surface_azimuth, time_step, horizon,
+        interval_index, map_variables, url, endpoint, **kwargs):
+    """Forward shared forecast and observation request arguments."""
+    return _get_meteonorm(
+        latitude, longitude, start, end, api_key, parameters,
+        surface_tilt, surface_azimuth, time_step, horizon,
+        interval_index, map_variables, url, endpoint, **kwargs)
 
 
 def _get_meteonorm(

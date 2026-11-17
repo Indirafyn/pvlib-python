@@ -1643,12 +1643,9 @@ class ModelChain:
         """
         weather = _to_tuple(weather)
         self.prepare_inputs(weather)
-        self.aoi_model()
-        self.spectral_model()
-
-        self.effective_irradiance_model()
-
-        self._run_from_effective_irrad(weather)
+        # Refactoring type: Extract Method.
+        # Share the common model execution pipeline with the POA entry point.
+        self._run_model_pipeline(weather)
 
         return self
 
@@ -1775,12 +1772,18 @@ class ModelChain:
         data = _to_tuple(data)
         self.prepare_inputs_from_poa(data)
 
+        # Refactoring type: Extract Method.
+        # Input preparation remains specific to POA data; execution is shared.
+        self._run_model_pipeline(data)
+
+        return self
+
+    def _run_model_pipeline(self, data):
+        """Run the common AOI, spectral, effective-irradiance, and output steps."""
         self.aoi_model()
         self.spectral_model()
         self.effective_irradiance_model()
-
         self._run_from_effective_irrad(data)
-
         return self
 
     def _run_from_effective_irrad(self, data):
