@@ -100,27 +100,27 @@ def get_solarposition(time, latitude, longitude,
     if isinstance(time, dt.datetime):
         time = pd.DatetimeIndex([time, ])
 
-    if method == 'nrel_c':
-        ephem_df = spa_c(time, latitude, longitude, pressure, temperature,
-                         **kwargs)
-    elif method == 'nrel_numba':
-        ephem_df = spa_python(time, latitude, longitude, altitude,
-                              pressure, temperature,
-                              how='numba', **kwargs)
-    elif method == 'nrel_numpy':
-        ephem_df = spa_python(time, latitude, longitude, altitude,
-                              pressure, temperature,
-                              how='numpy', **kwargs)
-    elif method == 'pyephem':
-        ephem_df = pyephem(time, latitude, longitude,
-                           altitude=altitude,
-                           pressure=pressure,
-                           temperature=temperature, **kwargs)
-    elif method == 'ephemeris':
-        ephem_df = ephemeris(time, latitude, longitude, pressure, temperature,
-                             **kwargs)
-    else:
+    # Refactoring type: Replace Conditional with Dispatch Table.
+    # Keep method-specific arguments in small closures while centralizing
+    # validation and invocation of the selected calculator.
+    calculators = {
+        'nrel_c': lambda: spa_c(
+            time, latitude, longitude, pressure, temperature, **kwargs),
+        'nrel_numba': lambda: spa_python(
+            time, latitude, longitude, altitude, pressure, temperature,
+            how='numba', **kwargs),
+        'nrel_numpy': lambda: spa_python(
+            time, latitude, longitude, altitude, pressure, temperature,
+            how='numpy', **kwargs),
+        'pyephem': lambda: pyephem(
+            time, latitude, longitude, altitude=altitude, pressure=pressure,
+            temperature=temperature, **kwargs),
+        'ephemeris': lambda: ephemeris(
+            time, latitude, longitude, pressure, temperature, **kwargs),
+    }
+    if method not in calculators:
         raise ValueError('Invalid solar position method')
+    ephem_df = calculators[method]()
 
     return ephem_df
 

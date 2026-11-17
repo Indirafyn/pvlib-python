@@ -203,31 +203,9 @@ def read_tmy3(filename, coerce_year=None, map_variables=True, encoding=None):
     meta['TZ'] = float(meta['TZ'])
     meta['USAF'] = int(meta['USAF'])
 
-    # get the date column as a pd.Series of numpy datetime64
-    data_ymd = pd.to_datetime(data['Date (MM/DD/YYYY)'], format='%m/%d/%Y')
-    # extract minutes
-    minutes = data['Time (HH:MM)'].str.split(':').str[1].astype(int)
-    # shift the time column so that midnite is 00:00 instead of 24:00
-    shifted_hour = data['Time (HH:MM)'].str.split(':').str[0].astype(int) % 24
-    # shift the dates at midnight (24:00) so they correspond to the next day.
-    # If midnight is specified as 00:00 do not shift date.
-    data_ymd[data['Time (HH:MM)'].str[:2] == '24'] += datetime.timedelta(days=1)  # noqa: E501
-    # NOTE: as of pandas>=0.24 the pd.Series.array has a month attribute, but
-    # in pandas-0.18.1, only DatetimeIndex has month, but indices are immutable
-    # so we need to continue to work with the panda series of dates `data_ymd`
-    data_index = pd.DatetimeIndex(data_ymd)
-    # use indices to check for a leap day and advance it to March 1st
-    leapday = (data_index.month == 2) & (data_index.day == 29)
-    data_ymd[leapday] += datetime.timedelta(days=1)
-    # shifted_hour is a pd.Series, so use pd.to_timedelta to get a pd.Series of
-    # timedeltas
-    if coerce_year is not None:
-        data_ymd = data_ymd.transform(lambda dt: dt.replace(year=coerce_year))
-        data_ymd.iloc[-1] = data_ymd.iloc[-1].replace(year=coerce_year+1)
-    # NOTE: as of pvlib-0.6.3, min req is pandas-0.18.1, so pd.to_timedelta
-    # unit must be in (D,h,m,s,ms,us,ns), but pandas>=0.24 allows unit='hour'
-    data.index = data_ymd + pd.to_timedelta(shifted_hour, unit='h') \
-        + pd.to_timedelta(minutes, unit='min')
+    # Refactoring type: Extract Method.
+    # Keep the file parser separate from TMY3 timestamp normalization.
+    data.index = _tmy3_index(data, coerce_year)
 
     if map_variables:
         data = data.rename(columns=VARIABLE_MAP)
@@ -235,6 +213,22 @@ def read_tmy3(filename, coerce_year=None, map_variables=True, encoding=None):
     data = data.tz_localize(int(meta['TZ'] * 3600))
 
     return data, meta
+
+
+def _tmy3_index(data, coerce_year=None):
+    """Build the TMY3 local-standard-time index from the raw date columns."""
+    data_ymd = pd.to_datetime(data['Date (MM/DD/YYYY)'], format='%m/%d/%Y')
+    minutes = data['Time (HH:MM)'].str.split(':').str[1].astype(int)
+    shifted_hour = data['Time (HH:MM)'].str.split(':').str[0].astype(int) % 24
+    data_ymd[data['Time (HH:MM)'].str[:2] == '24'] += datetime.timedelta(days=1)
+    data_index = pd.DatetimeIndex(data_ymd)
+    leapday = (data_index.month == 2) & (data_index.day == 29)
+    data_ymd[leapday] += datetime.timedelta(days=1)
+    if coerce_year is not None:
+        data_ymd = data_ymd.transform(lambda dt: dt.replace(year=coerce_year))
+        data_ymd.iloc[-1] = data_ymd.iloc[-1].replace(year=coerce_year + 1)
+    return (data_ymd + pd.to_timedelta(shifted_hour, unit='h')
+            + pd.to_timedelta(minutes, unit='min'))
 
 
 def read_tmy2(filename):
